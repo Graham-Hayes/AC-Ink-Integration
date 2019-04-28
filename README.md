@@ -119,6 +119,10 @@ Let's you specify the audio file name, file extension is not required. They shou
 Player: This line has voice over. #audio = Player1
 ```
 
+Note on audio: There's no real clean way to integrate audio with Adventure Creator, this integration plays the audio but the Speech class is unaware that there is audio. When the audio is done it moves on to the next line of dialogue. If your minimum display time is shorter than the length of the audio then it will be cut early. One solution is, in the Speech Manager set Display Subtitles Forever to on. This will still move on to the next line automatically once speech has finished, but if there is no audio then it will display until the player manually skips.
+
+In the ACInkIntegration class there is a commented out menu item function that will go through your ink files add a lineID tag and add them to the Speech Manager, this can give the desired behavoir but it's unfinished and only reccomended if you understand what it is doing.
+
 ## Scripting actions for Adventure Creator in Ink
 
 Using tags you can run other actions from your Ink script, this will allow you to stay in your script for longer and potentially cut down the size of your action lists. The tags are passed to the action in a list and will execute in order and before the line that they are attached to is displayed, some of the tags also have optional parameters so you can specify the behaviour. These mirror the options on the respective action in Adventure Creator.
