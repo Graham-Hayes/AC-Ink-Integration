@@ -17,6 +17,8 @@ This package allows the use of your Ink scripts with Adventure Creator. It is de
 
 You can play your Ink scripts as you would expect, and you can also run certain actions from your Ink script by using certain tags. You can play character animation, move characters, face characters in different directions, wait, play sound effects and music.
 
+It's still a work in progress, so use at your own discression.
+
 ## Third Party: Ink Script Action
 
 This package gives you a new action located in Third Party and Ink Script. The Unity package will place it in the correct location. If you add the script manually then it must be located in 'Assets/AdventureCreator/Scripts/Actions/'. 
