@@ -113,7 +113,7 @@ Player: My talking animation will not play. #noAnim
 
 ### audio
 
-Let's you specify the audio file name, file extension is not required. They should be kept in 'Rescources/Speech'
+Let's you specify the audio file name, file extension is not required. They should be kept in 'Rescources/Speech/'
 
 ```
 Player: This line has voice over. #audio = Player1
