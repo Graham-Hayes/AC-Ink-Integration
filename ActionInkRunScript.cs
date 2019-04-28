@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System;
 using System.Collections.Generic;
 using Ink.Runtime;
@@ -185,22 +185,15 @@ namespace AC
                                 }
                             }
                         }
-
-                        if(currentSpeechClip != null && !speech.speaker.speechAudioSource.isPlaying)
-                        {
-                            KickStarter.dialog.EndSpeechByCharacter(speech.speaker);
-                        }
-
+                        CheckSpeechAudioEnded();
                         return defaultPauseTime;
                     }
 
-                    if (speech != null && speech.isAlive)
+                    CheckSpeechAudioEnded();
+
+                    if (speech != null)
                     {
-                        if(currentSpeechClip != null && !speech.speaker.speechAudioSource.isPlaying)
-                        {
-                            KickStarter.dialog.EndSpeechByCharacter(speech.speaker);
-                        }
-                        return defaultPauseTime;
+                        if (speech.isAlive) return defaultPauseTime;
                     }
 
                     if (currentLine != string.Empty)
@@ -244,9 +237,22 @@ namespace AC
             choiceID = optionID;
         }
 
+        void CheckSpeechAudioEnded()
+        {
+            if (speech == null) return;
+
+            if (speech.speaker != null)
+            {
+                if (currentSpeechClip != null && !speech.speaker.speechAudioSource.isPlaying)
+                {
+                    KickStarter.dialog.EndSpeechByCharacter(speech.speaker);
+                }
+            }
+        }
+
         void SpeechStart(AC.Char speakingCharacter, string speechText, int lineID)
-        {    
-            if(currentSpeechClip != null)
+        {
+            if (currentSpeechClip != null && speakingCharacter != null)
             {
                 speakingCharacter.speechAudioSource.clip = currentSpeechClip;
                 speakingCharacter.speechAudioSource.loop = false;
@@ -256,7 +262,7 @@ namespace AC
 
         void SpeechStop(AC.Char speakingCharacter)
         {
-            if(speakingCharacter.speechAudioSource != null)
+            if (speakingCharacter != null)
             {
                 speakingCharacter.speechAudioSource.Stop();
             }
@@ -386,9 +392,9 @@ namespace AC
             {
                 int lineID = GetLineID(GetTagStartsWith("lineid"));
 
-                if(lineID == -1)
+                if (lineID == -1)
                 {
-                    GetSpeechAudio(GetTagStartsWith("audio") );
+                    GetSpeechAudio(GetTagStartsWith("audio"));
                 }
                 SpeechOptions options = GetSpeechOptions();
                 speech = KickStarter.dialog.StartDialog(currentSpeaker, dialogueLine, options.isBackground, lineID, options.noAnimation, options.noSkip);
@@ -406,14 +412,15 @@ namespace AC
             return -1;
         }
 
-        protected void GetSpeechAudio(string tag){
+        protected void GetSpeechAudio(string tag)
+        {
 
             string[] components = tag.Split('=');
 
             if (components.Length == 2)
             {
                 string path = defaultSpeechPath + components[1].Trim();
-                currentSpeechClip = Resources.Load(path) as AudioClip;             
+                currentSpeechClip = Resources.Load(path) as AudioClip;
             }
         }
 
@@ -425,11 +432,11 @@ namespace AC
             {
                 string option = item.ToLower().Trim();
 
-                if(option.EndsWith("bg")) options.isBackground = TagState(option);
-                else if(option.EndsWith("anim")) options.noAnimation = !TagState(option);
-                else if(option.EndsWith("skip")) options.noSkip = !TagState(option);
+                if (option.EndsWith("bg")) options.isBackground = TagState(option);
+                else if (option.EndsWith("anim")) options.noAnimation = !TagState(option);
+                else if (option.EndsWith("skip")) options.noSkip = !TagState(option);
             }
-            return options; 
+            return options;
         }
 
         protected string GetTagStartsWith(string tag)
@@ -538,7 +545,7 @@ namespace AC
                         }
                     }
                     else if (option.EndsWith("idle")) options.resetToIdle = TagState(option);
-                    else if (option.EndsWith("wait")) options.waitFinish = TagState(option);   
+                    else if (option.EndsWith("wait")) options.waitFinish = TagState(option);
                 }
             }
             animOptions = options;
@@ -706,8 +713,8 @@ namespace AC
             {
                 string option = components[i].Trim().ToLower();
 
-                if(option.EndsWith("instant")) options.isInstant = TagState(option);
-                else if(option.EndsWith("wait")) options.willWait = TagState(option);
+                if (option.EndsWith("instant")) options.isInstant = TagState(option);
+                else if (option.EndsWith("wait")) options.willWait = TagState(option);
             }
             return options;
         }
@@ -748,7 +755,7 @@ namespace AC
 
                 actionActor.MoveToPoint(marker.transform.position, options.run, options.pathFind);
 
-                if (!options.waitFinish) 
+                if (!options.waitFinish)
                 {
                     return actionComplete;
                 }
@@ -777,13 +784,13 @@ namespace AC
         {
             MoveOptions options = defaultMoveOptions;
 
-            for(int i = 2; i < components.Length; i++)
+            for (int i = 2; i < components.Length; i++)
             {
                 string option = components[i].ToLower().Trim();
 
-                if(option.EndsWith("run")) options.run = TagState(option);
-                else if(option.EndsWith("path")) options.run = TagState(option);
-                else if(option.EndsWith("wait")) options.waitFinish = TagState(option);
+                if (option.EndsWith("run")) options.run = TagState(option);
+                else if (option.EndsWith("path")) options.run = TagState(option);
+                else if (option.EndsWith("wait")) options.waitFinish = TagState(option);
             }
             return options;
         }
@@ -801,10 +808,10 @@ namespace AC
             if (components.Length > 2)
             {
                 options = GetMusicOptions(components);
-            } 
-            else 
+            }
+            else
             {
-                if(trackName == "stop") options.method = MusicAction.Stop;
+                if (trackName == "stop") options.method = MusicAction.Stop;
                 else if (trackName == "resume") options.method = MusicAction.ResumeLastStopped;
             }
             if (options.method == MusicAction.Play)
@@ -853,7 +860,7 @@ namespace AC
                 {
                     string[] fadeComponents = option.Split('=');
 
-                    if(fadeComponents.Length == 2)
+                    if (fadeComponents.Length == 2)
                     {
                         options.transitionTime = (float)Convert.ToDouble(fadeComponents[1]);
                     }
