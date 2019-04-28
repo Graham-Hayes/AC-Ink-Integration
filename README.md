@@ -57,7 +57,7 @@ To enable saving you need to create a global variable in the Variables Manager o
 
 ## Setting Default Behaviour
 
-It's expected that speech and actions in your game have a standard way of presentation. You can set the default behaviour by changing the initialisation of these variables. To get a different behaviour you will need to add extra tags or parameters in your Ink script, see below for more information on tags. 
+It's expected that speech and actions in your game have a standard way of presentation. You can set the default behaviour by changing the initialisation of these variables in ActionInkRunScript.cs. To get a different behaviour you will need to add extra tags or parameters in your Ink script, see below for more information on tags. 
 
 In all cases if you want the default behaviour then you will not need to specify with tags in your Ink script.
 
