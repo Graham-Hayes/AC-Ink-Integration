@@ -11,6 +11,12 @@
 1. Set Var ID to the ID number in the ACInkIntegration inspector on the Persistant Engine.
 1. Use the Ink Run Script action in your Action Lists.
 
+## Introduction
+
+This package allows the use of your Ink scripts with Adventure Creator. It is designed to minimally impact Adventure Creator so no files from the Adventure Creator asset are modified.
+
+You can play your Ink scripts as you would expect, and you can also run certain actions from your Ink script by using certain tags. You can play character animation, move characters, face characters in different directions, wait, play sound effects and music.
+
 ## Third Party: Ink Script Action
 
 This package gives you a new action located in Third Party and Ink Script. The Unity package will place it in the correct location. If you add the script manually then it must be located in 'Assets/AdventureCreator/Scripts/Actions/'. 
@@ -113,7 +119,7 @@ Player: This line has voice over. #audio = Player1
 
 ## Scripting actions for Adventure Creator in Ink
 
-Using tags you can run other actions from your Ink script, this will allow you to stay in your script for longer and potentially cut down the size of your action lists. The tags are passed to the action in a list and will execute in order, some of the tags also have optional parameters so you can specify the behaviour. These mirror the options on the respective action in Adventure Creator.
+Using tags you can run other actions from your Ink script, this will allow you to stay in your script for longer and potentially cut down the size of your action lists. The tags are passed to the action in a list and will execute in order and before the line that they are attached to is displayed, some of the tags also have optional parameters so you can specify the behaviour. These mirror the options on the respective action in Adventure Creator.
 
 Parameters must be split with commas.
 
@@ -167,10 +173,59 @@ You can add the following parameters:
 
 ### Set
 
+Set a Global Variable in the Vairiable manager to a value. Uses the label name of the variable.
+
+```
+#set playerHealth = 100
+```
+
 ### Wait
+
+Wait for a period of time.
+
+```
+#wait 1.0
+```
 
 ### Music
 
+Plays, stops, resumes or crossfades music. Music must be in the Music Storage Window.
+
+```
+#music myMusicFileName
+```
+
+Settng the track name to 'stop' will stop the current track.
+Setting the track name to 'resume' will resume the current track.
+
+You can add the following parameters.
+
+* loop/noLoop - loops the track or plays once
+* queue/noQueue - plays the track after the current track, or interupts
+* resume/noResume - Resumes if was played before, or starts from the beginning.
+* wait/noWait - waits for track to finish or not
+* fade - sets a fade time or crossfade time e.g. fade = 0.5
+* play - sets the method to play
+* crossfade - sets the method to crossfade
+
 ### Sound
 
-## Get Adventure Creator global variables in Ink
+Plays a sound file in the same way as the Play Sound One Shot action.
+
+```
+#sound mySoundFile
+```
+
+You can add the following parameters.
+
+* wait/noWait - wait for the sound to finish or not.
+
+## Get Adventure Creator Global Variables in Ink
+
+You can read global variables from the Variable Manager in your Ink scripts. Add the following to the top of your Ink story file:
+
+```
+EXTERNAL getValue(a)
+```
+
+This takes an integer which is the variable ID in the Variables Manager.
