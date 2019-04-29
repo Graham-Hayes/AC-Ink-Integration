@@ -373,14 +373,7 @@ namespace AC
             if (components.Length > 1)
             {
                 string speakerName = components[0].Trim();
-                foreach (Char speaker in actors)
-                {
-                    if (speaker.name == speakerName)
-                    {
-                        currentSpeaker = speaker;
-                        break;
-                    }
-                }
+                currentSpeaker = GetActorFrom(speakerName);
                 dialogueLine = components[1].Trim();
             }
             else
@@ -515,6 +508,10 @@ namespace AC
                     return speaker;
                 }
             }
+            if(actorName == KickStarter.player.name)
+                {
+                    return  KickStarter.player;
+                }
             return null;
         }
 
