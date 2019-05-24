@@ -365,6 +365,25 @@ namespace AC
         }
         protected void RunScript(string text)
         {
+            var (currentSpeaker, dialogueLine) = ExtractSpeakerAndDialogue(text);
+
+            if (dialogueLine == string.Empty)
+            {
+                return;
+            }
+
+            int lineID = GetLineID(GetTagStartsWith("lineid"));
+
+            if (lineID == -1)
+            {
+                GetSpeechAudio(GetTagStartsWith("audio"));
+            }
+            SpeechOptions options = GetSpeechOptions();
+            speech = KickStarter.dialog.StartDialog(currentSpeaker, dialogueLine, options.isBackground, lineID, options.noAnimation, options.noSkip);
+        }
+
+        private Tuple<Char, string> ExtractSpeakerAndDialogue(string text)
+        {
             Char currentSpeaker = null;
             char[] delimiter = { ':' };
             string[] components = text.Split(delimiter, 2);
@@ -381,17 +400,7 @@ namespace AC
                 dialogueLine = text;
             }
 
-            if (dialogueLine != string.Empty)
-            {
-                int lineID = GetLineID(GetTagStartsWith("lineid"));
-
-                if (lineID == -1)
-                {
-                    GetSpeechAudio(GetTagStartsWith("audio"));
-                }
-                SpeechOptions options = GetSpeechOptions();
-                speech = KickStarter.dialog.StartDialog(currentSpeaker, dialogueLine, options.isBackground, lineID, options.noAnimation, options.noSkip);
-            }
+            return Tuple.Create(currentSpeaker, dialogueLine);
         }
 
         protected int GetLineID(string tag)
@@ -1002,7 +1011,8 @@ namespace AC
             for (int i = 0; i < ACInkIntegration.inkStory.currentChoices.Count; ++i)
             {
                 Choice choice = ACInkIntegration.inkStory.currentChoices[i];
-                ButtonDialog button = new ButtonDialog(choice.index, choice.text, true);
+                var (_, dialogueText) = ExtractSpeakerAndDialogue(choice.text);
+                ButtonDialog button = new ButtonDialog(choice.index, dialogueText, true);
                 conversation.options.Add(button);
             }
         }
