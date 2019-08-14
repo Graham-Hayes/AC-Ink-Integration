@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System;
 using System.Collections.Generic;
 using Ink.Runtime;
@@ -16,6 +16,7 @@ namespace AC
         public List<Char> actors = new List<Char>();
         public List<Marker> markers = new List<Marker>();
         public List<AudioClip> sounds = new List<AudioClip>();
+        public List<_Camera> cameras = new List<_Camera>();
 
         protected Speech speech;
         protected AudioClip currentSpeechClip;
@@ -39,6 +40,7 @@ namespace AC
         static MusicOptions defaultMusicOptions = new MusicOptions(MusicAction.Play, false, false, false, false, 0.0f);
         static SoundOptions defaultSoundOptions = new SoundOptions(false);
         static SpeechOptions defaultSpeechOptions = new SpeechOptions(false, true, false);
+        static SwitchCameraOptions defaultCameraOptions = new SwitchCameraOptions(0.0f, MoveMethod.Linear, false, false);
         static string defaultSpeechPath = "Speech/";
         protected AnimOptions animOptions;
 
@@ -129,6 +131,22 @@ namespace AC
 
         }
 
+        protected struct SwitchCameraOptions
+        {
+            public float time;
+            public MoveMethod method;
+            public bool smooth;
+            public bool waitFinish;
+
+            public SwitchCameraOptions(float _time, MoveMethod _method, bool _smooth, bool _waitFinish)
+            {
+                time = _time;
+                method = _method;
+                smooth = _smooth;
+                waitFinish = _waitFinish;
+            }
+        }
+
         public ActionInkRunScript()
         {
             this.isDisplayed = true;
@@ -153,6 +171,8 @@ namespace AC
                     EventManager.OnStartSpeech += SpeechStart;
                     EventManager.OnStopSpeech += SpeechStop;
                     isRunning = true;
+                    tagIndex = -1;
+                    choiceID = -1;
                     SetScript();
                     return defaultPauseTime;
                 }
@@ -160,7 +180,6 @@ namespace AC
                 {
                     if (evaluatingTags)
                     {
-
                         float t = EvaluateTags();
 
                         if (t > actionComplete)
@@ -170,30 +189,28 @@ namespace AC
                         evaluatingTags = false;
                         return defaultPauseTime;
                     }
-                    if (ACInkIntegration.inkStory.canContinue && currentLine == string.Empty)
-                    {
-                        if (speech == null || !speech.isAlive)
-                        {
-                            if (tagIndex == -1)
-                            {
-                                currentLine = ACInkIntegration.inkStory.Continue();
-                                tagIndex = 0;
-                                if (ACInkIntegration.inkStory.currentTags.Count > 0 && !evaluatingTags)
-                                {
-                                    evaluatingTags = true;
-                                    return defaultPauseTime;
-                                }
-                            }
-                        }
-                        CheckSpeechAudioEnded();
-                        return defaultPauseTime;
-                    }
 
                     CheckSpeechAudioEnded();
 
                     if (speech != null)
                     {
-                        if (speech.isAlive) return defaultPauseTime;
+                        if (speech.isAlive && !speech.isBackground) return defaultPauseTime;
+                    }
+
+
+                    if (ACInkIntegration.inkStory.canContinue && currentLine == string.Empty)
+                    {
+
+                        if (tagIndex == -1)
+                        {
+                            currentLine = ACInkIntegration.inkStory.Continue();
+                            tagIndex = 0;
+                            if (ACInkIntegration.inkStory.currentTags.Count > 0 && !evaluatingTags)
+                            {
+                                evaluatingTags = true;
+                                return defaultPauseTime;
+                            }
+                        }
                     }
 
                     if (currentLine != string.Empty)
@@ -204,25 +221,34 @@ namespace AC
                         return defaultPauseTime;
                     }
 
-                    if (!conversation.IsActive(false) && choiceID >= 0)
+                    if (conversation != null)
                     {
-                        ACInkIntegration.inkStory.ChooseChoiceIndex(choiceID);
-                        choiceID = -1;
-                        tagIndex = -1;
-                        return defaultPauseTime;
-                    }
+                        if (!conversation.IsActive(false) && choiceID >= 0)
+                        {
+                            ACInkIntegration.inkStory.ChooseChoiceIndex(choiceID);
+                            choiceID = -1;
+                            tagIndex = -1;
+                            return defaultPauseTime;
+                        }
 
-                    if (ACInkIntegration.inkStory.currentChoices.Count > 0 && !conversation.IsActive(false))
-                    {
-                        GetChoices();
-                        conversation.Interact();
-                    }
+                        if (ACInkIntegration.inkStory.currentChoices.Count > 0 && !conversation.IsActive(false))
+                        {
+                            GetChoices();
+                            if(conversation.options.Count == 1)
+                            {
+                                choiceID = 0;
+                                return defaultPauseTime;
+                            } else 
+                            {
+                                conversation.Interact();
+                            }
+                        }
 
-                    if (conversation != null && conversation.IsActive(false))
-                    {
-                        return defaultPauseTime;
+                        if (conversation != null && conversation.IsActive(false))
+                        {
+                            return defaultPauseTime;
+                        }
                     }
-
                     isRunning = false;
                     EventManager.OnClickConversation -= GetChoiceID;
                     EventManager.OnStartSpeech -= SpeechStart;
@@ -281,6 +307,7 @@ namespace AC
         public int numberOfActors = 0;
         public int numberOfMarkers = 0;
         public int numberOfSounds = 0;
+        public int numberOfCameras = 0;
 
         override public void ShowGUI()
         {
@@ -338,6 +365,24 @@ namespace AC
                     sounds[i] = (AudioClip)EditorGUILayout.ObjectField(new GUIContent(string.Format("Sound {0}", 1 + i)), sounds[i], typeof(AudioClip), true);
                 }
             }
+
+            numberOfCameras = EditorGUILayout.DelayedIntField(new GUIContent("Number of cameras:"), numberOfCameras);
+
+            if (cameras != null)
+            {
+                while (numberOfCameras < cameras.Count)
+                {
+                    cameras.RemoveAt(cameras.Count - 1);
+                }
+                while (numberOfCameras > cameras.Count)
+                {
+                    cameras.Add(null);
+                }
+                for (int i = 0; i < cameras.Count; i++)
+                {
+                    cameras[i] = (_Camera)EditorGUILayout.ObjectField(new GUIContent(string.Format("Camera {0}", 1 + i)), cameras[i], typeof(_Camera), true);
+                }
+            }
             AfterRunningOption();
         }
 
@@ -367,19 +412,17 @@ namespace AC
         {
             var (currentSpeaker, dialogueLine) = ExtractSpeakerAndDialogue(text);
 
-            if (dialogueLine == string.Empty)
+            if (dialogueLine != string.Empty)
             {
-                return;
-            }
+                int lineID = GetLineID(GetTagStartsWith("lineid"));
 
-            int lineID = GetLineID(GetTagStartsWith("lineid"));
-
-            if (lineID == -1)
-            {
-                GetSpeechAudio(GetTagStartsWith("audio"));
+                if (lineID == -1)
+                {
+                    GetSpeechAudio(GetTagStartsWith("audio"));
+                }
+                SpeechOptions options = GetSpeechOptions();
+                speech = KickStarter.dialog.StartDialog(currentSpeaker, dialogueLine, options.isBackground, lineID, options.noAnimation, options.noSkip);
             }
-            SpeechOptions options = GetSpeechOptions();
-            speech = KickStarter.dialog.StartDialog(currentSpeaker, dialogueLine, options.isBackground, lineID, options.noAnimation, options.noSkip);
         }
 
         private Tuple<Char, string> ExtractSpeakerAndDialogue(string text)
@@ -498,6 +541,20 @@ namespace AC
                     case "sound":
                         time = Sound(components[1]);
                         break;
+
+                    case "camera":
+                        time = SwitchCamera(components[1]);
+                        break;
+
+                    case "inventory":
+                        InventoryAction(components[1]);
+                        time = actionComplete;
+                        break;
+
+                    case "toscene":
+                        ToScene(components[1]);
+                        time = actionComplete;
+                        break;
                 }
             }
             if (time == actionComplete)
@@ -517,10 +574,10 @@ namespace AC
                     return speaker;
                 }
             }
-            if(actorName == KickStarter.player.name)
-                {
-                    return  KickStarter.player;
-                }
+            if (actorName == KickStarter.player.name)
+            {
+                return KickStarter.player;
+            }
             return null;
         }
 
@@ -795,7 +852,7 @@ namespace AC
                 string option = components[i].ToLower().Trim();
 
                 if (option.EndsWith("run")) options.run = TagState(option);
-                else if (option.EndsWith("path")) options.run = TagState(option);
+                else if (option.EndsWith("path")) options.pathFind = TagState(option);
                 else if (option.EndsWith("wait")) options.waitFinish = TagState(option);
             }
             return options;
@@ -946,7 +1003,7 @@ namespace AC
                                     v.textVal = value;
                                     break;
                             }
-                            break;
+                            return;
                         }
                     }
                 }
@@ -956,6 +1013,88 @@ namespace AC
         protected float Wait(string text)
         {
             return (float)Convert.ToDouble(text.Trim());
+        }
+
+        protected SwitchCameraOptions GetSwitchCameraOptions(string[] components)
+        {
+            SwitchCameraOptions options = defaultCameraOptions;
+
+            for(int i = 1; i < components.Length; i++)
+            {
+                string option = components[i].ToLower().Trim();
+                if(option.StartsWith("time"))
+                {
+                    string[] t = option.Split('=');
+                    if(t.Length == 2){
+                        options.time = (float) Convert.ToDouble(t[1].Trim());
+                    }
+                    continue;
+                }
+                if(option.Equals("linear")) options.method = MoveMethod.Linear;
+                if(option.Equals("smooth")) options.method = MoveMethod.Smooth;
+                if(option.Equals("curved")) options.method = MoveMethod.Curved;
+                if(option.Equals("easein")) options.method = MoveMethod.EaseIn;
+                if(option.Equals("easeout")) options.method = MoveMethod.EaseOut;
+                if(option.EndsWith("retainSpeed")) options.smooth = TagState("option");         
+            }
+            return options;
+        }
+
+        protected float SwitchCamera(string text)
+        {
+            string cameraName = text.ToLower().Trim();
+            SwitchCameraOptions options = defaultCameraOptions;
+
+            string[] components = text.Split(',');
+            if(components.Length > 1){
+                options = GetSwitchCameraOptions(components);
+            }
+
+            foreach (_Camera camera in cameras)
+            {
+                if (camera.name.ToLower().Trim() == cameraName)
+                {
+                    KickStarter.mainCamera.SetGameCamera(camera, options.time, options.method, null, options.smooth);
+                }
+            }
+            if(options.waitFinish && options.time > 0.0f) return options.time;
+            
+            return actionComplete;
+        }
+
+        protected void InventoryAction(string text){
+
+            string[] components = text.Split(',');
+            string verb = components[0].ToLower().Trim();
+
+            switch(verb){
+                case "add":
+                    for(int i = 0; i < KickStarter.inventoryManager.items.Count ; i++)
+                    {
+                        if(KickStarter.inventoryManager.items[i].GetLabel(0).ToLower().Trim() == components[1].ToLower().Trim())
+                        {
+                            KickStarter.runtimeInventory.Add(i);
+                            break;          
+                        } 
+                    }
+                    break;
+                case "remove":
+                    for(int i = 0; i < KickStarter.inventoryManager.items.Count ; i++)
+                    {
+                        if(KickStarter.runtimeInventory.localItems[i].GetLabel(0).ToLower().Trim() == components[1].ToLower().Trim())
+                        {
+                            KickStarter.runtimeInventory.Remove(i);
+                            break;          
+                        } 
+                    }
+                    break;
+            }
+        }
+
+        protected void ToScene(string text)
+        {
+            KickStarter.sceneChanger.PrepareSceneForExit();
+            KickStarter.sceneChanger.ChangeScene(new SceneInfo(text.Trim()), true );
         }
 
         protected int SetBoolean(string str)

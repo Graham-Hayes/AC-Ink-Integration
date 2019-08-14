@@ -22,7 +22,7 @@ public class ACInkIntegration : MonoBehaviour
 {
     [HideInInspector] public static Story inkStory;
     public TextAsset mainStory;
-    public int varID;
+    public int varID = -1;
 
     private void OnEnable()
     {
@@ -68,6 +68,37 @@ public class ACInkIntegration : MonoBehaviour
                     return var.floatVal;
             }
             return "no var";
+        });
+
+        inkStory.BindExternalFunction("getLocalValue", (int a) =>
+        {
+            GVar var = LocalVariables.GetVariable(a);
+
+            if (var == null) return "no var";
+
+            switch (var.type)
+            {
+                case VariableType.Boolean:
+                    return var.BooleanValue;
+                case VariableType.Integer:
+                    return var.IntegerValue;
+                case VariableType.String:
+                    return var.textVal;
+                case VariableType.Float:
+                    return var.floatVal;
+            }
+            return "no var";
+        });
+
+        inkStory.BindExternalFunction("inventoryContains", (string item) =>
+        {
+            foreach(InvItem invItem in KickStarter.runtimeInventory.localItems){
+                if(invItem.GetLabel(0).Trim().ToLower() == item.Trim().ToLower())
+                {
+                    return true;
+                }     
+            }
+            return false;
         });
     }
 
