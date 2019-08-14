@@ -1035,7 +1035,8 @@ namespace AC
                 if(option.Equals("curved")) options.method = MoveMethod.Curved;
                 if(option.Equals("easein")) options.method = MoveMethod.EaseIn;
                 if(option.Equals("easeout")) options.method = MoveMethod.EaseOut;
-                if(option.EndsWith("retainSpeed")) options.smooth = TagState("option");         
+                if(option.EndsWith("retainSpeed")) options.smooth = TagState(option);
+                if(option.EndsWith("waitfinish")) options.waitFinish = TagState(option);        
             }
             return options;
         }
