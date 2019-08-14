@@ -35,7 +35,7 @@ Allows you to specify where in your story to begin. If left blank the story will
 
 ### Conversation
 
-A ***blank conversation object is required*** in your scene. It should have no dialogue options, they will be generated from the Ink story.
+A ***blank conversation object is required*** in your scene. It should have no dialogue options, they will be generated from the Ink story. In the inspector it's interaction source must be set to "Custom Script", Auto-play lone option must be unticked, the script currently auto plays lone options. 
 
 ### Number of Speakers
 
@@ -48,6 +48,28 @@ If you move characters around from the Ink script then you need to pass the mark
 ### Number of Sounds
 
 If you play and sound FX from the Ink script then you attach them here. Input the number of sounds you will use and link accordingly.
+
+## Third Party: Ink: Check Visit Count
+
+Another action in the package lets you check the visit count of a knot/stitch. It's located in Third Party and Ink: Check Visit Count
+
+It has the following fields:
+
+### Knot/Stitch
+
+The name of the knot or stitch to check.
+
+### Condition
+
+The operation to perform, either eqauls to, not equals, greater than or less than.
+
+### Number
+
+The number to compare with.
+
+### Condition Met/Not Met
+
+The flow of the action list continues based of the result of this action.
 
 ## ACInkIntegration class
 
@@ -69,7 +91,8 @@ static FaceOptions defaultFaceOptions = new FaceOptions(true, false);
 static MoveOptions defaultMoveOptions = new MoveOptions(false, true, true);
 static MusicOptions defaultMusicOptions = new MusicOptions(MusicAction.Play, false, false, false, false, 0.0f);
 static SoundOptions defaultSoundOptions = new SoundOptions(false);
-static SpeechOptions defaultSpeechOptions = new SpeechOptions(false, true, false);        
+static SpeechOptions defaultSpeechOptions = new SpeechOptions(false, true, false);
+static SwitchCameraOptions defaultCameraOptions = new SwitchCameraOptions(0.0f, MoveMethod.Linear, false, false);
 ```
 
 ## Dialogue Lines
@@ -226,6 +249,39 @@ You can add the following parameters.
 
 * wait/noWait - wait for the sound to finish or not.
 
+### Camera
+
+Switchs to another camera in the scene.
+
+```
+#camera newCamera
+```
+
+You can add the following parameters.
+
+* time - transition time e.g. time = 3.5
+* linear/smooth/curved/easeIn/easeOut - sets the move method (not case sensitive)
+* retainSpeed/noRetainSpeed = smooths the transition from previous camera
+* waitFinish/noWaitFinish = wait for transition to finish, or not.
+
+### Inventory
+
+Add or remove items from the current players inventory.
+
+```
+#inventory add, Key
+
+#inventory remove, Fish
+```
+
+### ToScene
+
+Switchs the scene by name.
+
+```
+#toScene MyNewScene
+```
+
 ## Get Adventure Creator Global Variables in Ink
 
 You can read global variables from the Variable Manager in your Ink scripts. Add the following to the top of your Ink story file:
@@ -235,3 +291,15 @@ EXTERNAL getValue(a)
 ```
 
 This takes an integer which is the variable ID in the Variables Manager.
+
+## Check if an object is in the players inventory in Ink
+
+You can check for an item in the players inventory in Ink scripts. Add the following to the top of your Ink story file:
+
+```
+EXTERNAL inventoryContains(item)
+```
+
+Item is the name of the object which must match the name in the Inventory Manager, it returns a bool.
+
+
