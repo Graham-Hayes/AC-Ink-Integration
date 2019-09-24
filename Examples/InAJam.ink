@@ -1,3 +1,5 @@
+// Download the game at: https://studiohazy.itch.io/in-a-jam
+
 === Intro ===
 // Black screen
 Graham: At the brink. That's the theme? #audio = Graham01
