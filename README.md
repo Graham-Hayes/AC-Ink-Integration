@@ -19,6 +19,10 @@ You can play your Ink scripts as you would expect, and you can also run certain 
 
 It's still a work in progress, so use at your own discression.
 
+## Examples
+
+In the Examples folder short scripts demonstrating the integration will be made available.
+
 ## Third Party: Ink Script Action
 
 This package gives you a new action located in Third Party and Ink Script. The Unity package will place it in the correct location. If you add the script manually then it must be located in 'Assets/AdventureCreator/Scripts/Actions/'. 
