@@ -37,13 +37,13 @@ Ticking this will reset the state of your story, ideal for starting a new game.
 
 Allows you to specify where in your story to begin. If left blank the story will run from the top.
 
-### Autoplay Lone Option
-
-If there is one option in a conversation remaining you can autoplay, or force the player to select it first.
-
 ### Conversation
 
 A ***blank conversation object is required*** in your scene. It should have no dialogue options, they will be generated from the Ink story. In the inspector it's interaction source must be set to "Custom Script", Auto-play lone option must be unticked. 
+
+### Auto-Select Lone Option
+
+If there is one option in a conversation remaining you can autoplay, or force the player to select it first.
 
 ### Number of Speakers
 
