@@ -22,6 +22,7 @@ namespace AC
         protected AudioClip currentSpeechClip;
         protected string currentLine = string.Empty;
         public Conversation conversation;
+        public bool autoSelectLoneOption;
         protected int choiceID = -1;
         protected int tagIndex = -1;
         protected bool evaluatingTags = false;
@@ -234,7 +235,7 @@ namespace AC
                         if (ACInkIntegration.inkStory.currentChoices.Count > 0 && !conversation.IsActive(false))
                         {
                             GetChoices();
-                            if(conversation.options.Count == 1)
+                            if(conversation.options.Count == 1 && autoSelectLoneOption)
                             {
                                 choiceID = 0;
                                 return defaultPauseTime;
@@ -314,6 +315,7 @@ namespace AC
             newStory = EditorGUILayout.Toggle("New Story?", newStory);
             knot = EditorGUILayout.TextField("Knot/Stitch:", knot);
             conversation = (Conversation)EditorGUILayout.ObjectField(new GUIContent("Conversation:"), conversation, typeof(Conversation), true);
+            autoSelectLoneOption = EditorGUILayout.Toggle("Auto-select lone option?", autoSelectLoneOption);
             numberOfActors = EditorGUILayout.DelayedIntField(new GUIContent("Number of speakers:"), numberOfActors);
 
             if (actors != null)
