@@ -63,9 +63,9 @@ public class ACInkIntegration : MonoBehaviour
                 case VariableType.Integer:
                     return var.IntegerValue;
                 case VariableType.String:
-                    return var.textVal;
+                    return var.TextValue;
                 case VariableType.Float:
-                    return var.floatVal;
+                    return var.FloatValue;
             }
             return "no var";
         });
@@ -83,9 +83,9 @@ public class ACInkIntegration : MonoBehaviour
                 case VariableType.Integer:
                     return var.IntegerValue;
                 case VariableType.String:
-                    return var.textVal;
+                    return var.TextValue;
                 case VariableType.Float:
-                    return var.floatVal;
+                    return var.FloatValue;
             }
             return "no var";
         });
