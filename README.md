@@ -302,7 +302,7 @@ Sets an object/characters visibility. True for visible, false for invisible.
 #visible true
 ```
 
-# Teleport
+### Teleport
 
 Teleports an object/character to a marker.
 
