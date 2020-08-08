@@ -57,6 +57,10 @@ If you move characters around from the Ink script then you need to pass the mark
 
 If you play and sound FX from the Ink script then you attach them here. Input the number of sounds you will use and link accordingly.
 
+### Number of Objects
+
+If you teleport or affect the visibility of any objects that aren't characters, they go in here. Input the number of objects and link accordingly.
+
 ## Third Party: Ink: Check Visit Count
 
 Another action in the package lets you check the visit count of a knot/stitch. It's located in Third Party and Ink: Check Visit Count
@@ -288,6 +292,22 @@ Switchs the scene by name.
 
 ```
 #toScene MyNewScene
+```
+
+### Visible
+
+Sets an object/characters visibility. True for visible, false for invisible.
+
+```
+#visible true
+```
+
+# Teleport
+
+Teleports an object/character to a marker.
+
+```
+#teleport MyObject, MyMarker
 ```
 
 ## Get Adventure Creator Global Variables in Ink
