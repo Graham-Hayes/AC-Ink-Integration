@@ -29,6 +29,8 @@ namespace AC
         protected bool tagActionRunning = false;
         protected Char actionActor = null;
         protected float actionComplete = -999f;
+        protected bool waiting = false;
+        protected DateTime startedWait;
 
         /*
         These static variables define the default behaviour for an action called from an Ink file via a tag.
@@ -550,7 +552,7 @@ namespace AC
 
                     case "wait":
                         time = Wait(components[1]);
-                        tagIndex += 1;
+                        //tagIndex += 1;
                         break;
 
                     case "animate":
@@ -1054,7 +1056,21 @@ namespace AC
 
         protected float Wait(string text)
         {
-            return (float)Convert.ToDouble(text.Trim());
+            if(!waiting)
+            {
+                waiting = true;
+                startedWait = DateTime.Now;
+            } else 
+            {
+                float waitTime = SetFloat(text);
+                TimeSpan ts = DateTime.Now.Subtract(startedWait);
+                if(ts.TotalSeconds >= waitTime)
+                {
+                    waiting = false;
+                    return actionComplete;
+                }
+            }
+            return defaultPauseTime;
         }
 
         protected SwitchCameraOptions GetSwitchCameraOptions(string[] components)
