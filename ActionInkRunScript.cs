@@ -17,12 +17,12 @@ namespace AC
         public List<Marker> markers = new List<Marker>();
         public List<AudioClip> sounds = new List<AudioClip>();
         public List<_Camera> cameras = new List<_Camera>();
+        public List<GameObject> objects = new List<GameObject>();
 
         protected Speech speech;
         protected AudioClip currentSpeechClip;
         protected string currentLine = string.Empty;
         public Conversation conversation;
-        public bool autoSelectLoneOption;
         protected int choiceID = -1;
         protected int tagIndex = -1;
         protected bool evaluatingTags = false;
@@ -44,6 +44,8 @@ namespace AC
         static SwitchCameraOptions defaultCameraOptions = new SwitchCameraOptions(0.0f, MoveMethod.Linear, false, false);
         static string defaultSpeechPath = "Speech/";
         protected AnimOptions animOptions;
+
+        protected ActionList parentActionList;
 
         protected struct AnimOptions
         {
@@ -156,6 +158,12 @@ namespace AC
             description = "Runs an Ink Script, from the start or designated knot";
         }
 
+        public override void AssignParentList (ActionList actionList)
+		{
+			parentActionList = actionList;
+			base.AssignParentList (actionList);
+		}
+
         override public float Run()
         {
             if (KickStarter.speechManager == null)
@@ -224,7 +232,7 @@ namespace AC
 
                     if (conversation != null)
                     {
-                        if (!conversation.IsActive(false) && choiceID >= 0)
+                        if (!KickStarter.playerInput.IsInConversation (true) && choiceID >= 0)
                         {
                             ACInkIntegration.inkStory.ChooseChoiceIndex(choiceID);
                             choiceID = -1;
@@ -232,23 +240,25 @@ namespace AC
                             return defaultPauseTime;
                         }
 
-                        if (ACInkIntegration.inkStory.currentChoices.Count > 0 && !conversation.IsActive(false))
+                        if (ACInkIntegration.inkStory.currentChoices.Count > 0 && !KickStarter.playerInput.IsInConversation (true))
                         {
                             GetChoices();
-                            if(conversation.options.Count == 1 && autoSelectLoneOption)
+                            if(conversation.options.Count == 1)
                             {
                                 choiceID = 0;
                                 return defaultPauseTime;
                             } else 
                             {
                                 conversation.Interact();
+                                parentActionList.actionListType = ActionListType.RunInBackground;
+                                return defaultPauseTime;
                             }
                         }
 
-                        if (conversation != null && conversation.IsActive(false))
-                        {
-                            return defaultPauseTime;
-                        }
+                         if (conversation != null && KickStarter.playerInput.IsInConversation (true))
+                          {
+                              return defaultPauseTime;
+                          }
                     }
                     isRunning = false;
                     EventManager.OnClickConversation -= GetChoiceID;
@@ -259,9 +269,11 @@ namespace AC
             }
             return 0f;
         }
+
         void GetChoiceID(Conversation conversation, int optionID)
         {
             choiceID = optionID;
+            parentActionList.actionListType = ActionListType.PauseGameplay;
         }
 
         void CheckSpeechAudioEnded()
@@ -309,13 +321,13 @@ namespace AC
         public int numberOfMarkers = 0;
         public int numberOfSounds = 0;
         public int numberOfCameras = 0;
+        public int numberOfObjects = 0;
 
         override public void ShowGUI()
         {
             newStory = EditorGUILayout.Toggle("New Story?", newStory);
             knot = EditorGUILayout.TextField("Knot/Stitch:", knot);
             conversation = (Conversation)EditorGUILayout.ObjectField(new GUIContent("Conversation:"), conversation, typeof(Conversation), true);
-            autoSelectLoneOption = EditorGUILayout.Toggle("Auto-select lone option?", autoSelectLoneOption);
             numberOfActors = EditorGUILayout.DelayedIntField(new GUIContent("Number of speakers:"), numberOfActors);
 
             if (actors != null)
@@ -385,6 +397,25 @@ namespace AC
                     cameras[i] = (_Camera)EditorGUILayout.ObjectField(new GUIContent(string.Format("Camera {0}", 1 + i)), cameras[i], typeof(_Camera), true);
                 }
             }
+
+            numberOfObjects = EditorGUILayout.DelayedIntField(new GUIContent("Number of objects:"), numberOfObjects);
+
+            if (objects != null)
+            {
+                while (numberOfObjects < objects.Count)
+                {
+                    objects.RemoveAt(objects.Count - 1);
+                }
+                while (numberOfObjects > objects.Count)
+                {
+                    objects.Add(null);
+                }
+                for (int i = 0; i < objects.Count; i++)
+                {
+                    objects[i] = (GameObject)EditorGUILayout.ObjectField(new GUIContent(string.Format("Object {0}", 1 + i)), objects[i], typeof(GameObject), true);
+                }
+            }
+
             AfterRunningOption();
         }
 
@@ -555,6 +586,14 @@ namespace AC
 
                     case "toscene":
                         ToScene(components[1]);
+                        time = actionComplete;
+                        break;
+                    case "visible":
+                        Visible(components[1]);
+                        time = actionComplete;
+                        break;
+                    case "teleport":
+                        Teleport(components[1]);
                         time = actionComplete;
                         break;
                 }
@@ -990,19 +1029,19 @@ namespace AC
                             switch (v.type)
                             {
                                 case VariableType.Boolean:
-                                    v.val = SetBoolean(value);
+                                    v.BooleanValue = SetBoolean(value);
                                     break;
 
                                 case VariableType.Integer:
-                                    v.val = SetInt(value);
+                                    v.IntegerValue = SetInt(value);
                                     break;
 
                                 case VariableType.Float:
-                                    v.floatVal = SetFloat(value);
+                                    v.FloatValue = SetFloat(value);
                                     break;
 
                                 case VariableType.String:
-                                    v.textVal = value;
+                                    v.TextValue = value;
                                     break;
                             }
                             return;
@@ -1011,6 +1050,7 @@ namespace AC
                 }
             }
         }
+
 
         protected float Wait(string text)
         {
@@ -1097,19 +1137,89 @@ namespace AC
         protected void ToScene(string text)
         {
             KickStarter.sceneChanger.PrepareSceneForExit();
-            KickStarter.sceneChanger.ChangeScene(new SceneInfo(text.Trim()), true );
+            int index = KickStarter.sceneChanger.NameToIndex (text.Trim());
+            KickStarter.sceneChanger.ChangeScene(index, true);
         }
 
-        protected int SetBoolean(string str)
+        protected void Visible(string text)
         {
-            if (str == "true")
+            String[] components = text.Split(',');
+            bool state = SetBoolean(components[1].Trim().ToLower());
+
+            foreach(GameObject obj in objects)
             {
-                return 1;
+                if(obj.name.ToLower() == components[0].Trim().ToLower())
+                {        
+                    if (obj.GetComponent<Renderer>())
+                    {
+                        obj.GetComponent<Renderer>().enabled = state;
+                    }
+                    foreach (Renderer _renderer in obj.GetComponentsInChildren <Renderer>())
+					{
+						_renderer.enabled = state;
+					}
+                   return;
+                }
             }
-            else
+
+            Char actor = GetActorFrom(components[0]);
+            if (actor != null)
             {
-                return 0;
+                if(actor.name.ToLower() == components[0].Trim().ToLower())
+                {     
+                    if (actor.GetComponent<Renderer>())
+                    {
+                        actor.GetComponent<Renderer>().enabled = state;
+                    }
+                    foreach (Renderer _renderer in actor.GetComponentsInChildren <Renderer>())
+					{
+						_renderer.enabled = state;
+					}
+                
+                }
             }
+        }
+
+        protected void Teleport(string text)
+        {
+
+            string[] components = text.Split(',');
+
+            Marker mark = null;
+       
+            foreach(Marker m in markers)
+            {
+                if(components[1].Trim().ToLower() == m.name.Trim().ToLower())
+                {
+                    mark = m;
+                    break;
+                }
+            }
+
+            if (mark == null) return;
+
+            Char c = GetActorFrom(components[0]);
+
+            if(c != null)
+            {
+                c.Teleport(mark.transform.position, false);
+                return;
+            }
+            
+
+            foreach(GameObject g in objects)
+            {
+                if(components[0].Trim().ToLower() == g.name.Trim().ToLower())
+                {
+                    g.transform.position = mark.transform.position;
+                    return;
+                }
+            }
+        }
+
+        protected bool SetBoolean(string str)
+        {
+            return str == "true" ? true : false;
         }
 
         protected int SetInt(string str)
