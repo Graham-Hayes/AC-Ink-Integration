@@ -13,6 +13,7 @@ namespace AC
     {
         public bool newStory;
         public string knot;
+	public bool autoPlayLoneOption = false;
         public List<Char> actors = new List<Char>();
         public List<Marker> markers = new List<Marker>();
         public List<AudioClip> sounds = new List<AudioClip>();
@@ -245,11 +246,12 @@ namespace AC
                         if (ACInkIntegration.inkStory.currentChoices.Count > 0 && !KickStarter.playerInput.IsInConversation (true))
                         {
                             GetChoices();
-                            if(conversation.options.Count == 1)
+                            if(autoPlayLoneOption && conversation.options.Count == 1)
                             {
                                 choiceID = 0;
                                 return defaultPauseTime;
-                            } else 
+                            } 
+			    else 
                             {
                                 conversation.Interact();
                                 parentActionList.actionListType = ActionListType.RunInBackground;
@@ -258,9 +260,9 @@ namespace AC
                         }
 
                          if (conversation != null && KickStarter.playerInput.IsInConversation (true))
-                          {
-                              return defaultPauseTime;
-                          }
+                         {
+                             return defaultPauseTime;
+                         }
                     }
                     isRunning = false;
                     EventManager.OnClickConversation -= GetChoiceID;
@@ -330,6 +332,10 @@ namespace AC
             newStory = EditorGUILayout.Toggle("New Story?", newStory);
             knot = EditorGUILayout.TextField("Knot/Stitch:", knot);
             conversation = (Conversation)EditorGUILayout.ObjectField(new GUIContent("Conversation:"), conversation, typeof(Conversation), true);
+	    if(conversation != null)
+            {
+                autoPlayLoneOption = EditorGUILayout.Toggle("Autoplay Lone Option?", autoPlayLoneOption);
+            }
             numberOfActors = EditorGUILayout.DelayedIntField(new GUIContent("Number of speakers:"), numberOfActors);
 
             if (actors != null)
