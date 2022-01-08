@@ -9,13 +9,17 @@
 1. Drag your Ink story JSON file to Main Story in the ACInkIntegration inspector on the Persistant Engine.
 1. Create a string global variable in the variables manager and note its ID number
 1. Set Var ID to the ID number in the ACInkIntegration inspector on the Persistant Engine.
-1. Use the Ink Run Script action in your Action Lists.
+2. Convert Conversation Menu to Unity UI Prefab and place in Ink Choice Menu slot in the ACInkIntegration on the Persistent Engine inspector.
+3. Ensure a cursor is set for cutscenes if using the conversation menu.
+4. Use the Ink Run Script action in your Action Lists.
 
 ## Introduction
 
 This package allows the use of your Ink scripts with Adventure Creator. It is designed to minimally impact Adventure Creator so no files from the Adventure Creator asset are modified.
 
 You can play your Ink scripts as you would expect, and you can also run certain actions from your Ink script by using certain tags. You can play character animation, move characters, face characters in different directions, wait, play sound effects and music.
+
+It creates an action list from your Ink Script which you can inspect in your scene with the object called Action Holder. Important to note is it diverges from AC by not using the way it does Conversations, recent updates to AC made this neccessary, but it does mean that you need a cursor set for cutscenes.
 
 It's still a work in progress, so use at your own discression.
 
@@ -37,14 +41,6 @@ Ticking this will reset the state of your story, ideal for starting a new game.
 
 Allows you to specify where in your story to begin. If left blank the story will run from the top.
 
-### Conversation
-
-A ***blank conversation object is required*** in your scene. It should have no dialogue options, they will be generated from the Ink story. In the inspector it's interaction source must be set to "Custom Script", Auto-play lone option must be unticked. 
-
-### Autoplay Lone Option
-
-If there is one option in a conversation remaining you can autoplay, or force the player to select it first.
-
 ### Number of Speakers
 
 Set this to the number of characters that will take part in the story. It will create blank fields for each speaker, and then link them to the characters in your scene. **It's not nessesary to add the player.**
@@ -52,6 +48,10 @@ Set this to the number of characters that will take part in the story. It will c
 ### Number of Markers
 
 If you move characters around from the Ink script then you need to pass the markers to the action. Input the number of markers you will use and link accordingly.
+
+### Number of Cameras
+
+If you need to switch camera from the Ink script, set the number of cameras here and link the cameras to be used.
 
 ### Number of Sounds
 
@@ -90,6 +90,10 @@ This class is required to save the story state in Adventure Creator's save syste
 Your main JSON file from your Ink story goes in the Main Story field. It is assumed that you will use one monolithic story for your game.
 
 To enable saving you need to create a global variable in the Variables Manager of the string type. You can call it anything, but note its ID number and set Var ID to that number.
+
+## ActionInkChoice
+
+This class is a "shadow action" it shouldn't be used in a normal Action List, it's called by ActionInkRunScript for creating an action that shows the Conversation menu with your Ink choices.
 
 ## Setting Default Behaviour
 
@@ -154,9 +158,19 @@ Let's you specify the audio file name, file extension is not required. They shou
 Player: This line has voice over. #audio = Player1
 ```
 
-Note on audio: There's no real clean way to integrate audio with Adventure Creator, this integration plays the audio but the Speech class is unaware that there is audio. When the audio is done it moves on to the next line of dialogue. If your minimum display time is shorter than the length of the audio then it will be cut early. One solution is, in the Speech Manager set Display Subtitles Forever to on. This will still move on to the next line automatically once speech has finished, but if there is no audio then it will display until the player manually skips.
+Note on audio: There's no real clean way to integrate audio with Adventure Creator, the way I've done it is to have a script go through my Ink file and create a TSV with the columns:
 
-In the ACInkIntegration class there is a commented out menu item function that will go through your ink files add a lineID tag and add them to the Speech Manager, this can give the desired behavoir but it's unfinished and only reccomended if you understand what it is doing.
+ID, Owner, Original text, AudioFilename
+
+For example:
+```
+1000	Queen Crow	What happened to the music?	Queen Crow1
+1001	Peregrine	The power’s out, your majesty.	Peregrine1
+1002	Queen Crow	Guards!	Queen Crow2
+1003	Queen Crow	Bring me Peregrine Fixalot.	Queen Crow3
+```
+
+In the ACInkIntegration class there is a commented out menu item function that will go through the TSV and add the lines to the Speech Manager, this can give the desired behavoir but it's loose and only reccomended if you understand what it is doing.
 
 ## Scripting actions for Adventure Creator in Ink
 
@@ -212,12 +226,31 @@ You can add the following parameters:
 * instant/noInstant - Turn instantly or not.
 * wait/noWait - Wait to turn or not.
 
+### SetStandard
+
+Change the standard animation for a character's idle/walk/run/talk
+
+```
+#setStandard Player, idle, newIdleAnimation
+```
+
+Parameters should always be in this order: Character, standard, new animation name
+
+### ResetToIdle
+
+Resets a character back to their idle animation.
+
+```
+#resetToIdle Player
+```
+
 ### Set
 
 Set a Global Variable in the Vairiable manager to a value. Uses the label name of the variable.
 
 ```
 #set playerHealth = 100
+#set gotBanana = true
 ```
 
 ### Wait
@@ -309,6 +342,19 @@ Teleports an object/character to a marker.
 ```
 #teleport MyObject, MyMarker
 ```
+
+### Fade
+
+Fade in or out the camera.
+
+```
+#fade out, wait, 0.5
+#fade in, instant
+```
+Parameters:
+* wait/noWait = wait for fade to finish or not
+* instant/noInstant = instant fade or not
+* time as float
 
 ## Get Adventure Creator Global Variables in Ink
 
