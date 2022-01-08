@@ -1,5 +1,6 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using Ink.Runtime;
 #if UNITY_EDITOR
@@ -11,27 +12,24 @@ namespace AC
     [System.Serializable]
     public class ActionInkRunScript : Action
     {
+        public override ActionCategory Category{get { return ActionCategory.ThirdParty;}}
+        public override string Title {get {return "Run Ink Script";}}
+        public override string Description { get { return "Runs an Ink Script, from the start or designated knot";}}
+       
         public bool newStory;
-        public string knot;
-	public bool autoPlayLoneOption = false;
+        public string knot;    
         public List<Char> actors = new List<Char>();
         public List<Marker> markers = new List<Marker>();
         public List<AudioClip> sounds = new List<AudioClip>();
         public List<_Camera> cameras = new List<_Camera>();
         public List<GameObject> objects = new List<GameObject>();
 
-        protected Speech speech;
-        protected AudioClip currentSpeechClip;
-        protected string currentLine = string.Empty;
-        public Conversation conversation;
-        protected int choiceID = -1;
-        protected int tagIndex = -1;
-        protected bool evaluatingTags = false;
-        protected bool tagActionRunning = false;
-        protected Char actionActor = null;
-        protected float actionComplete = -999f;
-        protected bool waiting = false;
-        protected DateTime startedWait;
+        public ActionList actionList;
+        public GameObject gameObject;
+
+        protected int maxChoices = 3;
+		
+		protected Dictionary<string, string[]> speakerColours = new Dictionary<string, string[]>();
 
         /*
         These static variables define the default behaviour for an action called from an Ink file via a tag.
@@ -40,15 +38,12 @@ namespace AC
          */
         static AnimOptions defaultAnimOptions = new AnimOptions(0, 0, false, true);
         static FaceOptions defaultFaceOptions = new FaceOptions(true, false);
-        static MoveOptions defaultMoveOptions = new MoveOptions(false, true, true);
+        static MoveOptions defaultMoveOptions = new MoveOptions(false, true, true, false);
         static MusicOptions defaultMusicOptions = new MusicOptions(MusicAction.Play, false, false, false, false, 0.0f);
         static SoundOptions defaultSoundOptions = new SoundOptions(false);
-        static SpeechOptions defaultSpeechOptions = new SpeechOptions(false, true, false);
-        static SwitchCameraOptions defaultCameraOptions = new SwitchCameraOptions(0.0f, MoveMethod.Linear, false, false);
-        static string defaultSpeechPath = "Speech/";
-        protected AnimOptions animOptions;
-
-        protected ActionList parentActionList;
+        static SpeechOptions defaultSpeechOptions = new SpeechOptions(false, false, false);
+        static SwitchCameraOptions defaultCameraOptions = new SwitchCameraOptions(0.0f, MoveMethod.Smooth, false, true);
+        static FadeOptions defaultFadeOptions = new FadeOptions(false, true, 1.0f);
 
         protected struct AnimOptions
         {
@@ -78,17 +73,33 @@ namespace AC
             }
         }
 
+        protected struct FadeOptions
+        {
+            public bool isInstant;
+            public bool willWait;
+            public float time;
+
+            public FadeOptions(bool _isInstant = false, bool _willWait = true, float _time = 1.0f)
+            {
+                isInstant = _isInstant;
+                willWait = _willWait;
+                time = _time;
+            }
+        }
+
         protected struct MoveOptions
         {
             public bool run;
             public bool pathFind;
             public bool waitFinish;
+            public bool face;
 
-            public MoveOptions(bool _run, bool _pathFind, bool _waitFinish)
+            public MoveOptions(bool _run, bool _pathFind, bool _waitFinish, bool _face)
             {
                 run = _run;
                 pathFind = _pathFind;
                 waitFinish = _waitFinish;
+                face = _face;
             }
         }
 
@@ -134,7 +145,6 @@ namespace AC
                 noAnimation = _noAnimation;
                 noSkip = _noSkip;
             }
-
         }
 
         protected struct SwitchCameraOptions
@@ -151,23 +161,9 @@ namespace AC
                 smooth = _smooth;
                 waitFinish = _waitFinish;
             }
-        }
-
-        public ActionInkRunScript()
-        {
-            this.isDisplayed = true;
-            category = ActionCategory.ThirdParty;
-            title = "Ink Script";
-            description = "Runs an Ink Script, from the start or designated knot";
-        }
-
-        public override void AssignParentList (ActionList actionList)
-		{
-			parentActionList = actionList;
-			base.AssignParentList (actionList);
 		}
 
-        override public float Run()
+         override public float Run()
         {
             if (KickStarter.speechManager == null)
             {
@@ -179,138 +175,93 @@ namespace AC
             {
                 if (!isRunning)
                 {
-                    EventManager.OnClickConversation += GetChoiceID;
-                    EventManager.OnStartSpeech += SpeechStart;
-                    EventManager.OnStopSpeech += SpeechStop;
                     isRunning = true;
-                    tagIndex = -1;
-                    choiceID = -1;
+                    ACInkIntegration.choiceID = -1;
                     SetScript();
+                    gameObject = new GameObject("Action Holder");
+                    actionList = CreateActionList();
+                    BuildActionList();
+                    actionList.Interact(0, false);
+
                     return defaultPauseTime;
                 }
                 else
-                {
-                    if (evaluatingTags)
+                {           
+                    if(ACInkIntegration.choiceID >= 0)
                     {
-                        float t = EvaluateTags();
+                        ACInkIntegration.inkStory.ChooseChoiceIndex(ACInkIntegration.choiceID);
+                        BuildActionList();
+                        ACInkIntegration.choiceID = -1;
+                        actionList.Interact(0, false);
 
-                        if (t > actionComplete)
-                        {
-                            return t;
-                        }
-                        evaluatingTags = false;
-                        return defaultPauseTime;
                     }
 
-                    CheckSpeechAudioEnded();
-
-                    if (speech != null)
-                    {
-                        if (speech.isAlive && !speech.isBackground) return defaultPauseTime;
-                    }
-
-
-                    if (ACInkIntegration.inkStory.canContinue && currentLine == string.Empty)
-                    {
-
-                        if (tagIndex == -1)
-                        {
-                            currentLine = ACInkIntegration.inkStory.Continue();
-                            tagIndex = 0;
-                            if (ACInkIntegration.inkStory.currentTags.Count > 0 && !evaluatingTags)
-                            {
-                                evaluatingTags = true;
-                                return defaultPauseTime;
-                            }
-                        }
-                    }
-
-                    if (currentLine != string.Empty)
-                    {
-                        RunScript(currentLine);
-                        tagIndex = -1;
-                        currentLine = string.Empty;
-                        return defaultPauseTime;
-                    }
-
-                    if (conversation != null)
-                    {
-                        if (!KickStarter.playerInput.IsInConversation (true) && choiceID >= 0)
-                        {
-                            ACInkIntegration.inkStory.ChooseChoiceIndex(choiceID);
-                            choiceID = -1;
-                            tagIndex = -1;
-                            return defaultPauseTime;
-                        }
-
-                        if (ACInkIntegration.inkStory.currentChoices.Count > 0 && !KickStarter.playerInput.IsInConversation (true))
-                        {
-                            GetChoices();
-                            if(autoPlayLoneOption && conversation.options.Count == 1)
-                            {
-                                choiceID = 0;
-                                return defaultPauseTime;
-                            } 
-			    else 
-                            {
-                                conversation.Interact();
-                                parentActionList.actionListType = ActionListType.RunInBackground;
-                                return defaultPauseTime;
-                            }
-                        }
-
-                         if (conversation != null && KickStarter.playerInput.IsInConversation (true))
-                         {
-                             return defaultPauseTime;
-                         }
-                    }
+                    if (KickStarter.actionListManager.IsListRunning (actionList))
+					{
+						return defaultPauseTime;
+					}
+					    else
+					{
+						isRunning = false;
+					}
+                    
                     isRunning = false;
-                    EventManager.OnClickConversation -= GetChoiceID;
-                    EventManager.OnStartSpeech -= SpeechStart;
-                    EventManager.OnStopSpeech -= SpeechStop;
+                    Destroy(gameObject);
+
                     return 0f;
                 }
             }
             return 0f;
         }
-
-        void GetChoiceID(Conversation conversation, int optionID)
+       
+        void BuildActionList()
         {
-            choiceID = optionID;
-            parentActionList.actionListType = ActionListType.PauseGameplay;
+           actionList.actions = new List<Action>();
+
+            while(ACInkIntegration.inkStory.canContinue)
+            {
+                String currentLine = ACInkIntegration.inkStory.Continue();
+
+                 foreach(string tag in ACInkIntegration.inkStory.currentTags)
+                 {
+                     Action action = EvaluateTag(tag);
+
+                     if(action != null)
+                     {
+                         actionList.actions.Add(action);
+                     }
+                 }
+  
+                ActionSpeech actionSpeech = RunScript(currentLine);
+                if (actionSpeech != null) actionList.actions.Add(actionSpeech);
+                
+            }
+
+            if (ACInkIntegration.inkStory.currentChoices.Count > 0)
+            {
+                actionList.actions.Add(ActionInkChoice.CreateNew(GetChoices(maxChoices)));              
+            }
         }
 
-        void CheckSpeechAudioEnded()
-        {
-            if (speech == null) return;
+        protected List<string> GetChoices(int maxChoices){
 
-            if (speech.speaker != null)
+            List<string> choices = new List<string>(); 
+            string state = ACInkIntegration.inkStory.state.ToJson();
+
+            for (int i = 0; i < ACInkIntegration.inkStory.currentChoices.Count; ++i)
             {
-                if (currentSpeechClip != null && !speech.speaker.speechAudioSource.isPlaying)
-                {
-                    KickStarter.dialog.EndSpeechByCharacter(speech.speaker);
+                Choice choice = ACInkIntegration.inkStory.currentChoices[i];
+                ACInkIntegration.inkStory.ChooseChoiceIndex(i);
+                ACInkIntegration.inkStory.Continue();
+                var (_, dialogueText) = ExtractSpeakerAndDialogue(choice.text, true);
+                choices.Add(dialogueText);
+                ACInkIntegration.inkStory.state.LoadJson(state);
+                if(i == maxChoices-1){
+                    return choices;
                 }
             }
-        }
+            return choices;
 
-        void SpeechStart(AC.Char speakingCharacter, string speechText, int lineID)
-        {
-            if (currentSpeechClip != null && speakingCharacter != null)
-            {
-                speakingCharacter.speechAudioSource.clip = currentSpeechClip;
-                speakingCharacter.speechAudioSource.loop = false;
-                speakingCharacter.speechAudioSource.Play();
-            }
-        }
-
-        void SpeechStop(AC.Char speakingCharacter)
-        {
-            if (speakingCharacter != null)
-            {
-                speakingCharacter.speechAudioSource.Stop();
-            }
-
-            currentSpeechClip = null;
         }
 
         override public void Skip()
@@ -331,11 +282,6 @@ namespace AC
         {
             newStory = EditorGUILayout.Toggle("New Story?", newStory);
             knot = EditorGUILayout.TextField("Knot/Stitch:", knot);
-            conversation = (Conversation)EditorGUILayout.ObjectField(new GUIContent("Conversation:"), conversation, typeof(Conversation), true);
-	    if(conversation != null)
-            {
-                autoPlayLoneOption = EditorGUILayout.Toggle("Autoplay Lone Option?", autoPlayLoneOption);
-            }
             numberOfActors = EditorGUILayout.DelayedIntField(new GUIContent("Number of speakers:"), numberOfActors);
 
             if (actors != null)
@@ -423,7 +369,6 @@ namespace AC
                     objects[i] = (GameObject)EditorGUILayout.ObjectField(new GUIContent(string.Format("Object {0}", 1 + i)), objects[i], typeof(GameObject), true);
                 }
             }
-
             AfterRunningOption();
         }
 
@@ -449,28 +394,27 @@ namespace AC
                 //TODO: Evaluate knot tags
             }
         }
-        protected void RunScript(string text)
+        protected ActionSpeech RunScript(string text)
         {
             var (currentSpeaker, dialogueLine) = ExtractSpeakerAndDialogue(text);
 
-            if (dialogueLine != string.Empty)
+            if (dialogueLine.Length > 0)
             {
                 int lineID = GetLineID(GetTagStartsWith("lineid"));
 
-                if (lineID == -1)
-                {
-                    GetSpeechAudio(GetTagStartsWith("audio"));
-                }
                 SpeechOptions options = GetSpeechOptions();
-                speech = KickStarter.dialog.StartDialog(currentSpeaker, dialogueLine, options.isBackground, lineID, options.noAnimation, options.noSkip);
+                
+                return ActionSpeech.CreateNew(currentSpeaker,dialogueLine,lineID,!options.isBackground);
             }
+            return null;
         }
 
-        private Tuple<Char, string> ExtractSpeakerAndDialogue(string text)
+        private Tuple<Char, string> ExtractSpeakerAndDialogue(string text, bool isConversation = false)
         {
             Char currentSpeaker = null;
+            string localisedText = text;
             char[] delimiter = { ':' };
-            string[] components = text.Split(delimiter, 2);
+            string[] components = localisedText.Split(delimiter, 2);
             string dialogueLine = "";
 
             if (components.Length > 1)
@@ -481,10 +425,10 @@ namespace AC
             }
             else
             {
-                dialogueLine = text;
+                dialogueLine = localisedText;
             }
 
-            return Tuple.Create(currentSpeaker, dialogueLine);
+            return Tuple.Create(currentSpeaker, dialogueLine.Trim());
         }
 
         protected int GetLineID(string tag)
@@ -496,18 +440,6 @@ namespace AC
                 return Convert.ToInt32(components[1].Trim());
             }
             return -1;
-        }
-
-        protected void GetSpeechAudio(string tag)
-        {
-
-            string[] components = tag.Split('=');
-
-            if (components.Length == 2)
-            {
-                string path = defaultSpeechPath + components[1].Trim();
-                currentSpeechClip = Resources.Load(path) as AudioClip;
-            }
         }
 
         protected SpeechOptions GetSpeechOptions()
@@ -537,85 +469,57 @@ namespace AC
             return string.Empty;
         }
 
-        protected float EvaluateTags()
+        protected Action EvaluateTag(string tag)
         {
-            if (tagIndex >= ACInkIntegration.inkStory.currentTags.Count)
-            {
-                return actionComplete;
-            }
-            string tag = ACInkIntegration.inkStory.currentTags[tagIndex];
             char[] delimiter = { ' ' };
             string[] components = tag.Split(delimiter, 2);
-            float time = actionComplete;
-
+           
             if (components.Length == 2)
             {
                 switch (components[0].ToLower())
                 {
                     case "move":
-                        time = MoveTo(components[1]);
-                        break;
-
+                        return MoveTo(components[1]);
                     case "wait":
-                        time = Wait(components[1]);
-                        //tagIndex += 1;
-                        break;
-
+                        return Wait(components[1]);
                     case "animate":
-                        time = PlayAnimation(components[1]);
-                        break;
-
+                        return Animate(components[1]);
                     case "set":
-                        time = actionComplete;
-                        SetVariable(components[1]);
-                        break;
-
+                        return SetVariable(components[1]);
                     case "face":
-                        time = Face(components[1]);
-                        break;
-
+                       return Face(components[1]);
                     case "music":
-                        time = actionComplete;
-                        Music(components[1]);
-                        break;
-
+                        return Music(components[1]);
                     case "sound":
-                        time = Sound(components[1]);
-                        break;
-
+                        return Sound(components[1]);
                     case "camera":
-                        time = SwitchCamera(components[1]);
-                        break;
-
+                        return SwitchCamera(components[1]);
                     case "inventory":
-                        InventoryAction(components[1]);
-                        time = actionComplete;
-                        break;
-
+                        return InventoryAction(components[1]);
                     case "toscene":
-                        ToScene(components[1]);
-                        time = actionComplete;
-                        break;
+                        return ToScene(components[1]);
                     case "visible":
-                        Visible(components[1]);
-                        time = actionComplete;
-                        break;
+                        return Visible(components[1]);
                     case "teleport":
-                        Teleport(components[1]);
-                        time = actionComplete;
-                        break;
+                        return Teleport(components[1]);
+                    case "fade":
+                        return Fade(components[1]);
+                    case "setstandard":
+                        return SetStandard(components[1]);
+                    case "resettoidle":
+                        return ResetToIdle(components[1]);
                 }
             }
-            if (time == actionComplete)
-            {
-                tagIndex += 1;
-                time = defaultPauseTime;
-            }
-            return time;
+            return null;
         }
 
         protected Char GetActorFrom(string actorName)
         {
+            if (actorName == KickStarter.player.name)
+            {
+                return KickStarter.player;
+            }
+
             foreach (Char speaker in actors)
             {
                 if (speaker.name == actorName.Trim())
@@ -623,14 +527,11 @@ namespace AC
                     return speaker;
                 }
             }
-            if (actorName == KickStarter.player.name)
-            {
-                return KickStarter.player;
-            }
+            
             return null;
         }
 
-        protected void SetAnimOptions(string[] components)
+        protected AnimOptions SetAnimOptions(string[] components)
         {
             AnimOptions options = defaultAnimOptions;
 
@@ -660,161 +561,82 @@ namespace AC
                     else if (option.EndsWith("wait")) options.waitFinish = TagState(option);
                 }
             }
-            animOptions = options;
+            return options;
         }
 
-        protected float PlayAnimation(string text)
+        protected Action Animate(string text)
         {
-            if (!tagActionRunning)
-            {
-                string[] components = text.Split(',');
+             string[] components = text.Split(',');
 
-                if (components.Length < 2)
-                {
-                    tagActionRunning = false;
-                    return actionComplete;
-                }
+            if (components.Length < 2) return null;
 
-                actionActor = GetActorFrom(components[0]);
+            Char actionActor = GetActorFrom(components[0]);
+            string clip = components[1].Trim();
+            AnimOptions animOptions = SetAnimOptions(components);
 
-                if (actionActor == null) return actionComplete;
+            if (actionActor == null){ 
 
-                SetAnimOptions(components);
+                GameObject animObject = null;
 
-                tagActionRunning = true;
-                actionActor.charState = CharState.Custom;
-                actionActor.GetAnimator().CrossFade(components[1].Trim(), 0, 0);
-
-                if (!animOptions.waitFinish)
-                {
-                    tagActionRunning = false;
-                    return actionComplete;
-                }
-                return defaultPauseTime;
-            }
-            else
-            {
-                float totalLength = actionActor.GetAnimator().GetCurrentAnimatorStateInfo(animOptions.layer).length;
-                float timeLeft = (1f - actionActor.GetAnimator().GetCurrentAnimatorStateInfo(animOptions.layer).normalizedTime) * totalLength;
-                timeLeft -= 0.1f;
-
-                if (timeLeft > 0f)
-                {
-                    return (timeLeft);
-                }
-
-                if (animOptions.resetToIdle)
-                {
-                    actionActor.charState = CharState.Idle;
-                }
-            }
-
-            tagActionRunning = false;
-            actionActor = null;
-            return actionComplete;
-        }
-
-        protected float Face(string text)
-        {
-            if (!tagActionRunning)
-            {
-                string[] components = text.Split(',');
-
-                if (components.Length < 2) return actionComplete;
-
-                actionActor = GetActorFrom(components[0]);
-
-                if (actionActor == null) return actionComplete;
-
-                FaceOptions faceOptions = defaultFaceOptions;
-
-                if (components.Length > 2)
-                {
-                    faceOptions = GetFaceOptions(components);
-                }
-
-                if (!faceOptions.isInstant && actionActor.IsMovingAlongPath())
-                {
-                    actionActor.EndPath();
-                }
-
-                actionActor.SetLookDirection(GetLookVector(components[1].Trim().ToLower()), faceOptions.isInstant);
-
-                if (!faceOptions.isInstant)
-                {
-                    if (faceOptions.willWait)
+                foreach(GameObject obj in objects){
+                    if(obj.name.ToLower().Trim() == components[0].ToLower().Trim())
                     {
-                        tagActionRunning = true;
-                        return defaultPauseTime;
+                        animObject = obj;
+                        break;
                     }
                 }
-                return actionComplete;
+
+                if(animObject == null) return null;
+             
+                return ActionAnim.CreateNew_SpritesUnity_PlayCustom(animObject.GetComponent<Animator>(),clip,0,0,animOptions.waitFinish);                 
             }
             else
             {
-                if (actionActor.IsTurning())
-                {
-                    return defaultPauseTime;
-                }
-                else
-                {
-                    tagActionRunning = false;
-                    actionActor = null;
-                    return actionComplete;
-                }
-            }
+                return ActionCharAnim.CreateNew_SpritesUnity_PlayCustom(actionActor,clip,false,0,0,animOptions.waitFinish, animOptions.resetToIdle );
+            }         
         }
 
-        protected Vector3 GetLookVector(string direction)
+        protected ActionCharFaceDirection Face(string text)
+        {     
+            string[] components = text.Split(',');
+
+            if (components.Length < 2) return null;
+
+            Char actionActor = GetActorFrom(components[0]);
+
+            if (actionActor == null) return null;
+
+            CharDirection dir = GetLookVector(components[1].Trim().ToLower());
+            FaceOptions faceOptions = defaultFaceOptions;
+
+            if (components.Length > 2) faceOptions = GetFaceOptions(components);
+
+            return ActionCharFaceDirection.CreateNew(actionActor, dir, ActionCharFaceDirection.RelativeTo.Camera, faceOptions.isInstant, faceOptions.willWait);         
+        }
+
+        protected CharDirection GetLookVector(string direction)
         {
-            Vector3 lookVector = Vector3.zero;
-            Vector3 upVector = Camera.main.transform.up;
-            Vector3 rightVector = Camera.main.transform.right - new Vector3(0f, 0.01f); // Angle slightly so that left->right rotations face camera
-
-            if (SceneSettings.IsTopDown())
+            switch(direction)
             {
-                upVector = -Camera.main.transform.forward;
+                case "down":
+                    return CharDirection.Down;
+                case "left":
+                    return CharDirection.Left;
+                case "right":
+                    return CharDirection.Right;
+                case "up":
+                    return CharDirection.Up;
+                case "upleft":
+                    return CharDirection.UpLeft;
+                case "upright":
+                    return CharDirection.UpRight;
+                case "downright":
+                    return CharDirection.DownRight;
+                case "downleft":
+                    return CharDirection.DownLeft;
             }
 
-            if (direction == "down")
-            {
-                lookVector = -upVector;
-            }
-            else if (direction == "left")
-            {
-                lookVector = -rightVector;
-            }
-            else if (direction == "right")
-            {
-                lookVector = rightVector;
-            }
-            else if (direction == "up")
-            {
-                lookVector = upVector;
-            }
-            else if (direction == "downleft")
-            {
-                lookVector = (-upVector - rightVector).normalized;
-            }
-            else if (direction == "downright")
-            {
-                lookVector = (-upVector + rightVector).normalized;
-            }
-            else if (direction == "upleft")
-            {
-                lookVector = (upVector - rightVector).normalized;
-            }
-            else if (direction == "upright")
-            {
-                lookVector = (upVector + rightVector).normalized;
-            }
-            else
-            {
-                //TODO: face object in here
-            }
-
-            lookVector = new Vector3(lookVector.x, 0f, lookVector.y);
-            return lookVector;
+            return CharDirection.Up;         
         }
 
         protected FaceOptions GetFaceOptions(string[] components)
@@ -830,66 +652,44 @@ namespace AC
             }
             return options;
         }
-        protected float MoveTo(string text)
+
+        protected ActionCharPathFind MoveTo(string text)
         {
-            if (!tagActionRunning)
+            string[] components = text.Split(',');
+
+            if (components.Length < 2)
             {
-                string[] components = text.Split(',');
+  
+                return null;
+            }
+            Char actionActor = GetActorFrom(components[0]);
 
-                if (components.Length < 2)
+            if (actionActor == null) return null;
+
+            Marker marker = null;
+
+            foreach (Marker mark in markers)
+            {
+                if (mark.name == components[1].Trim())
                 {
-                    tagActionRunning = false;
-                    return actionComplete;
+                    marker = mark;
+                    break;
                 }
-                actionActor = GetActorFrom(components[0]);
-
-                if (actionActor == null) return actionComplete;
-
-                Marker marker = null;
-
-                foreach (Marker mark in markers)
-                {
-                    if (mark.name == components[1].Trim())
-                    {
-                        marker = mark;
-                        break;
-                    }
-                }
-
-                if (marker == null) return actionComplete;
-
-                MoveOptions options = defaultMoveOptions;
-
-                if (components.Length > 2)
-                {
-                    options = GetMoveOptions(components);
-                }
-
-                actionActor.MoveToPoint(marker.transform.position, options.run, options.pathFind);
-
-                if (!options.waitFinish)
-                {
-                    return actionComplete;
-                }
-                tagActionRunning = true;
-                return defaultPauseTime;
             }
 
-            if (actionActor == null)
+            if (marker == null) return null;
+
+            MoveOptions options = defaultMoveOptions;
+
+            if (components.Length > 2)
             {
-                tagActionRunning = false;
-                return actionComplete;
+                options = GetMoveOptions(components);
             }
-            else if (actionActor.IsMovingAlongPath())
-            {
-                return defaultPauseTime;
-            }
-            else
-            {
-                tagActionRunning = false;
-                actionActor = null;
-                return actionComplete;
-            }
+            
+            PathSpeed speed = PathSpeed.Walk;
+            if(options.run) speed = PathSpeed.Run;
+
+            return ActionCharPathFind.CreateNew(actionActor, marker, speed, options.pathFind, options.waitFinish, options.face);
         }
 
         protected MoveOptions GetMoveOptions(string[] components)
@@ -903,64 +703,45 @@ namespace AC
                 if (option.EndsWith("run")) options.run = TagState(option);
                 else if (option.EndsWith("path")) options.pathFind = TagState(option);
                 else if (option.EndsWith("wait")) options.waitFinish = TagState(option);
+                else if (option.EndsWith("face")) options.face = TagState(option);
             }
             return options;
         }
 
-        protected void Music(string text)
+        protected ActionMusic Music(string text)
         {
             Music music = KickStarter.stateHandler.GetMusicEngine();
 
-            if (music == null) return;
+            if (music == null) return null;
 
             string[] components = text.Split(',');
             string trackName = components[0].Trim().ToLower();
             MusicOptions options = defaultMusicOptions;
 
-            if (components.Length > 2)
-            {
-                options = GetMusicOptions(components);
+            if (components.Length > 1) options = GetMusicOptions(components);
+            
+            if (trackName == "stop") return ActionMusic.CreateNew_Stop(options.transitionTime, options.wait);
+            else if (trackName == "resume") return ActionMusic.CreateNew_ResumeLastTrack(options.transitionTime);
+
+            int index = 0;
+
+            for(int i=0; i<KickStarter.settingsManager.musicStorages.Count; i++){
+               if(KickStarter.settingsManager.musicStorages[i].audioClip.name.ToLower() == trackName){
+                   index = i;
+                   break;
+               }
             }
-            else
-            {
-                if (trackName == "stop") options.method = MusicAction.Stop;
-                else if (trackName == "resume") options.method = MusicAction.ResumeLastStopped;
-            }
-            if (options.method == MusicAction.Play)
-            {
-                foreach (MusicStorage track in KickStarter.settingsManager.musicStorages)
-                {
-                    if (track.audioClip.name.ToLower() == trackName)
-                    {
-                        music.Play(track.ID, options.loop, options.queue, options.transitionTime, options.resume);
-                    }
-                }
-            }
-            else if (options.method == MusicAction.Crossfade)
-            {
-                foreach (MusicStorage track in KickStarter.settingsManager.musicStorages)
-                {
-                    if (track.audioClip.name.ToLower() == trackName)
-                    {
-                        music.Crossfade(track.ID, options.loop, options.queue, options.transitionTime, options.resume);
-                    }
-                }
-            }
-            else if (options.method == MusicAction.Stop)
-            {
-                music.StopAll(options.transitionTime);
-            }
-            else if (options.method == MusicAction.ResumeLastStopped)
-            {
-                music.ResumeLastQueue(options.transitionTime, options.resume);
-            }
+
+            if (options.method == MusicAction.Play) return ActionMusic.CreateNew_Play(index,options.loop,options.queue,options.transitionTime,options.transitionTime > 0f,options.wait);    
+        
+            return null;
         }
 
         protected MusicOptions GetMusicOptions(string[] components)
         {
             MusicOptions options = defaultMusicOptions;
 
-            for (int i = 2; i < components.Length; i++)
+            for (int i = 1; i < components.Length; i++)
             {
                 string option = components[i].Trim().ToLower();
 
@@ -978,12 +759,11 @@ namespace AC
                     }
                 }
                 else if (option == "play") options.method = MusicAction.Play;
-                else if (option == "crossfade") options.method = MusicAction.Crossfade;
             }
             return options;
         }
 
-        protected float Sound(string text)
+        protected ActionSoundShot Sound(string text)
         {
             string[] components = text.Split(',');
             SoundOptions options = defaultSoundOptions;
@@ -993,31 +773,19 @@ namespace AC
                 string option = components[1].ToLower().Trim();
                 if (option.EndsWith("wait")) options.waitFinish = TagState(option);
             }
-
-            if (!tagActionRunning)
+         
+            foreach (AudioClip audioClip in sounds)
             {
-                foreach (AudioClip audioClip in sounds)
+                if (audioClip.name == components[0].Trim())
                 {
-                    if (audioClip.name == components[0].Trim())
-                    {
-                        Vector3 originPos = Camera.main.transform.position;
-                        float volume = Options.GetSFXVolume();
-                        AudioSource.PlayClipAtPoint(audioClip, originPos, volume);
-
-                        if (options.waitFinish)
-                        {
-                            tagActionRunning = true;
-                            return audioClip.length;
-                        }
-                        break;
-                    }
+                    return ActionSoundShot.CreateNew(audioClip,null,options.waitFinish);
                 }
             }
-            tagActionRunning = false;
-            return actionComplete;
+            
+            return null;          
         }
 
-        protected void SetVariable(string text)
+        protected ActionVarSet SetVariable(string text)
         {
             string[] components = text.Split('=');
 
@@ -1030,53 +798,63 @@ namespace AC
                 {
                     List<GVar> vars = GlobalVariables.GetAllVars();
 
-                    foreach (GVar v in vars)
+                    for (int i = 0 ; i < vars.Count ; i++)
                     {
-                        if (v.label == varName)
+                        GVar v = vars[i];
+
+                        if (varName == v.label)
                         {
                             switch (v.type)
                             {
                                 case VariableType.Boolean:
-                                    v.BooleanValue = SetBoolean(value);
-                                    break;
-
+                                    return ActionVarSet.CreateNew_Global(i, SetBoolean(value));
                                 case VariableType.Integer:
-                                    v.IntegerValue = SetInt(value);
-                                    break;
-
+                                    return ActionVarSet.CreateNew_Global(i, SetInt(value));
                                 case VariableType.Float:
-                                    v.FloatValue = SetFloat(value);
-                                    break;
-
+                                    return ActionVarSet.CreateNew_Global(i, SetFloat(value));
                                 case VariableType.String:
-                                    v.TextValue = value;
-                                    break;
+                                    return ActionVarSet.CreateNew_Global(i, value);
                             }
-                            return;
                         }
                     }
                 }
             }
+            return null;
         }
 
+        protected ActionTeleport Teleport(string text){
 
-        protected float Wait(string text)
-        {
-            if(!waiting)
-            {
-                waiting = true;
-                startedWait = DateTime.Now;
-            } else 
-            {
-                float waitTime = SetFloat(text);
-                TimeSpan ts = DateTime.Now.Subtract(startedWait);
-                if(ts.TotalSeconds >= waitTime)
-                {
-                    waiting = false;
-                    return actionComplete;
+            string[] components = text.Split(',');
+
+            Marker mark = null;
+       
+            foreach(Marker m in markers){
+                if(components[1].Trim().ToLower() == m.name.Trim().ToLower()){
+                    mark = m;
+                    break;
                 }
             }
-            return defaultPauseTime;
+
+            if (mark == null) return null;
+            
+            Char c = GetActorFrom(components[0]);
+
+            if(c != null){
+                return ActionTeleport.CreateNew(c.gameObject, mark);
+            }
+            
+            foreach(GameObject g in objects){
+                if(components[0].Trim().ToLower() == g.name.Trim().ToLower()){
+                    return ActionTeleport.CreateNew(g, mark);
+                }
+            }
+
+            return null;
+        }
+
+        protected ActionPause Wait(string text)
+        {
+            return ActionPause.CreateNew(SetFloat(text));
         }
 
         protected SwitchCameraOptions GetSwitchCameraOptions(string[] components)
@@ -1105,29 +883,26 @@ namespace AC
             return options;
         }
 
-        protected float SwitchCamera(string text)
+        protected ActionCamera SwitchCamera(string text)
         {
-            string cameraName = text.ToLower().Trim();
             SwitchCameraOptions options = defaultCameraOptions;
-
             string[] components = text.Split(',');
-            if(components.Length > 1){
-                options = GetSwitchCameraOptions(components);
-            }
+            string cameraName = components[0];
 
+            if(components.Length > 1) options = GetSwitchCameraOptions(components);
+            
             foreach (_Camera camera in cameras)
             {
-                if (camera.name.ToLower().Trim() == cameraName)
+                if (camera.name == cameraName)
                 {
-                    KickStarter.mainCamera.SetGameCamera(camera, options.time, options.method, null, options.smooth);
+                   return ActionCamera.CreateNew(camera, options.time, options.waitFinish, options.method); 
                 }
             }
-            if(options.waitFinish && options.time > 0.0f) return options.time;
-            
-            return actionComplete;
+
+            return null;
         }
 
-        protected void InventoryAction(string text){
+        protected ActionInventorySet InventoryAction(string text){
 
             string[] components = text.Split(',');
             string verb = components[0].ToLower().Trim();
@@ -1137,9 +912,8 @@ namespace AC
                     for(int i = 0; i < KickStarter.inventoryManager.items.Count ; i++)
                     {
                         if(KickStarter.inventoryManager.items[i].GetLabel(0).ToLower().Trim() == components[1].ToLower().Trim())
-                        {
-                            KickStarter.runtimeInventory.Add(i);
-                            break;          
+                        {             
+                            return ActionInventorySet.CreateNew_Add(i);       
                         } 
                     }
                     break;
@@ -1148,100 +922,117 @@ namespace AC
                     {
                         if(KickStarter.runtimeInventory.localItems[i].GetLabel(0).ToLower().Trim() == components[1].ToLower().Trim())
                         {
-                            KickStarter.runtimeInventory.Remove(i);
-                            break;          
+                            return ActionInventorySet.CreateNew_Remove(i);         
                         } 
                     }
                     break;
             }
+            return null;
         }
 
-        protected void ToScene(string text)
+        protected ActionScene ToScene(string text)
         {
-            KickStarter.sceneChanger.PrepareSceneForExit();
-            int index = KickStarter.sceneChanger.NameToIndex (text.Trim());
-            KickStarter.sceneChanger.ChangeScene(index, true);
+            return ActionScene.CreateNew_Switch(text.Trim(), false, false);           
         }
 
-        protected void Visible(string text)
-        {
-            String[] components = text.Split(',');
-            bool state = SetBoolean(components[1].Trim().ToLower());
+        protected ActionFade Fade(string text){
+            
+            string[] components = text.Split(',');
+            FadeType fadeType = components[0].ToLower().Trim() == "out" ? FadeType.fadeOut : FadeType.fadeIn;
+            FadeOptions options = defaultFadeOptions;
 
-            foreach(GameObject obj in objects)
-            {
-                if(obj.name.ToLower() == components[0].Trim().ToLower())
-                {        
-                    if (obj.GetComponent<Renderer>())
-                    {
-                        obj.GetComponent<Renderer>().enabled = state;
+            if (components.Length > 1){
+                for(int i = 1 ; i<components.Length ; i++){
+                    string param = components[i].ToLower().Trim();
+                    if(param.EndsWith("wait")){
+                        options.willWait = TagState(param);
+                        continue;
                     }
-                    foreach (Renderer _renderer in obj.GetComponentsInChildren <Renderer>())
-					{
-						_renderer.enabled = state;
-					}
-                   return;
+                    if(param.EndsWith("instant")){
+                        options.willWait = TagState(param);
+                        continue;
+                    }
+                    float.TryParse(param, out options.time);
+
+                }
+            }
+
+            return ActionFade.CreateNew(fadeType, options.time, options.willWait);
+        }
+
+        protected ActionVisible Visible(string text){
+
+            String[] components = text.Split(',');
+            VisState state = VisState.Visible;
+            if(components[1].Trim().ToLower() == "false") state = VisState.Invisible;
+            
+            foreach(GameObject obj in objects){
+                if(obj.name.ToLower() == components[0].Trim().ToLower()){
+                    
+                    return ActionVisible.CreateNew(obj, state, true); 
                 }
             }
 
             Char actor = GetActorFrom(components[0]);
-            if (actor != null)
-            {
-                if(actor.name.ToLower() == components[0].Trim().ToLower())
-                {     
-                    if (actor.GetComponent<Renderer>())
-                    {
-                        actor.GetComponent<Renderer>().enabled = state;
-                    }
-                    foreach (Renderer _renderer in actor.GetComponentsInChildren <Renderer>())
-					{
-						_renderer.enabled = state;
-					}
-                
+            if (actor != null){
+                if(actor.name.ToLower() == components[0].Trim().ToLower()){
+                    return ActionVisible.CreateNew(actor.gameObject, state, true);            
                 }
             }
+            return null;
         }
 
-        protected void Teleport(string text)
+        protected ActionCharAnim SetStandard(string str)
         {
-
-            string[] components = text.Split(',');
-
-            Marker mark = null;
-       
-            foreach(Marker m in markers)
-            {
-                if(components[1].Trim().ToLower() == m.name.Trim().ToLower())
-                {
-                    mark = m;
-                    break;
-                }
-            }
-
-            if (mark == null) return;
-
-            Char c = GetActorFrom(components[0]);
-
-            if(c != null)
-            {
-                c.Teleport(mark.transform.position, false);
-                return;
-            }
+            string[] components = str.Split(',');
+  
+            if(components.Length < 3) return null;
             
+            Char actor = GetActorFrom(components[0]);
 
-            foreach(GameObject g in objects)
-            {
-                if(components[0].Trim().ToLower() == g.name.Trim().ToLower())
-                {
-                    g.transform.position = mark.transform.position;
-                    return;
-                }
+            if(actor == null) return null;
+
+            string movement = components[1].Trim().ToLower();
+            string animation = components[2].Trim();
+            AnimStandard standard = AnimStandard.Idle;
+
+            switch(movement){
+                case "idle":
+                    standard = AnimStandard.Idle;
+                    break;
+                case "walk":
+                    standard = AnimStandard.Walk;
+                    break;
+                case "talk":
+                    standard = AnimStandard.Talk;
+                    break;
+                case "run":
+                    standard = AnimStandard.Run;
+                    break;
             }
+
+            return ActionCharAnim.CreateNew_SpritesUnity_SetStandard(actor,standard,animation);
         }
 
+        protected ActionCharAnim ResetToIdle(string str)
+        {   
+            Char actor = GetActorFrom(str.Trim());
+            if (actor != null){
+                return ActionCharAnim.CreateNew_SpritesUnity_ResetToIdle(actor);
+            }  
+            return null;        
+        }
+		
         protected bool SetBoolean(string str)
         {
-            return str == "true" ? true : false;
+            if (str == "true")
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
 
         protected int SetInt(string str)
@@ -1278,17 +1069,14 @@ namespace AC
             return !str.StartsWith("no");
         }
 
-        protected void GetChoices()
-        {
-            conversation.options.Clear();
-
-            for (int i = 0; i < ACInkIntegration.inkStory.currentChoices.Count; ++i)
-            {
-                Choice choice = ACInkIntegration.inkStory.currentChoices[i];
-                var (_, dialogueText) = ExtractSpeakerAndDialogue(choice.text);
-                ButtonDialog button = new ButtonDialog(choice.index, dialogueText, true);
-                conversation.options.Add(button);
-            }
-        }
-    }
-}
+        private ActionList CreateActionList ()
+		{
+			ActionList currentActionList = gameObject.GetComponent <ActionList>();
+			if (currentActionList != null)
+			{
+				return currentActionList;
+			}
+			return gameObject.AddComponent <ActionList>();
+		}      
+    }  
+	}

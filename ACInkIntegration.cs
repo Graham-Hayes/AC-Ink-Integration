@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.IO;
 using Ink.Runtime;
 using AC;
 
@@ -23,6 +24,8 @@ public class ACInkIntegration : MonoBehaviour
     [HideInInspector] public static Story inkStory;
     public TextAsset mainStory;
     public int varID = -1;
+    public Canvas inkChoiceMenu;
+    [HideInInspector] public static int choiceID = -1;
 
     private void OnEnable()
     {
@@ -30,12 +33,15 @@ public class ACInkIntegration : MonoBehaviour
         BindFunctions();
         EventManager.OnBeforeSaving += BeforeSave;
         EventManager.OnFinishLoading += AfterLoad;
+        //EventManager.OnClickConversation += SetChoiceID;
+        Debug.Log(KickStarter.speechManager.lines.Count);
     }
 
     private void OnDisable()
     {
         EventManager.OnBeforeSaving -= BeforeSave;
         EventManager.OnFinishLoading -= AfterLoad;
+        //EventManager.OnClickConversation -= SetChoiceID;
     }
 
     private void BeforeSave(int saveID)
@@ -100,91 +106,76 @@ public class ACInkIntegration : MonoBehaviour
             }
             return false;
         });
-
-        
     }
+
+     void SetChoiceID(Conversation conversation, int optionID)
+        {
+            Debug.Log("Choose " + optionID);
+            choiceID = optionID;
+
+        }
 
     /*
         GatherSpeech goes through your Ink files that are in the Assets/Story/ directory and adds a lineID tag
         It then creates a SpeechLine in the SpeechManager.
         Probably a good idea to backup your Ink files before using.
      */
-    //   [MenuItem("Adventure Creator/Third Party/Ink/Gather Speech (DANGER: EXPERIMENTAL)")]
-    // private static void GatherSpeech()
-    // {
+ /*     [MenuItem("Adventure Creator/Third Party/Ink/Gather Speech (DANGER: EXPERIMENTAL)")]
+    private static void GatherSpeech()
+    {
 
-    //     string[] inkFiles = Directory.GetFiles(Application.dataPath + "/Story/", "*.ink");
+        string[] inkFiles = Directory.GetFiles(Application.dataPath + "/AdvJam21/Story/", "*.csv");
         
-    //     foreach (string file in inkFiles)
-    //     {
-    //         string line;
+        foreach (string file in inkFiles)
+        {
+            string line;
 
-    //         StreamReader r = new StreamReader(file);
-    //         string finalFile = string.Empty;
-    //         bool inCommentBlock = false;
+            StreamReader r = new StreamReader(file);
+           // string finalFile = string.Empty;
+           // bool inCommentBlock = false;
 
-    //         SpeechManager speechManager = KickStarter.speechManager;
+            SpeechManager speechManager = KickStarter.speechManager;
+            int index = 0;
+            using (r)
+            {
+                do
+                {
+                    line = r.ReadLine();
+                    if (line != null)
+                    {
 
-    //         using (r)
-    //         {
-    //             do
-    //             {
-    //                 line = r.ReadLine();
-    //                 if (line != null)
-    //                 {
-    //                     finalFile += line + "\n";
+                        if(index == 0){
+                            index++;
+                            continue;
+                        }
+                    
+                        string[] components = line.Split('\t');
+                        int id = int.Parse(components[0]);
+                        string owner = components[1];
+                        bool isPlayer = false;
+                        if(owner == "Peregrine"){
+                            isPlayer = true;
+                        }
+                        string text = components[2];
+                        string audioFile = components[3];
 
-    //                     if (inCommentBlock) continue;
-    //                     else if (line.Trim().StartsWith("#")) continue;
-    //                     else if (line.Trim().StartsWith("->")) continue;
-    //                     else if (line.Trim().StartsWith("=")) continue;
-    //                     else if (line.Trim() == string.Empty) continue;
-    //                     else if (line.Trim().StartsWith("EXTERNAL ")) continue;
-    //                     else if (line.Trim().StartsWith("//")) continue;
-    //                     else if (inCommentBlock && line.Trim().StartsWith("*/"))
-    //                     {
-    //                         inCommentBlock = false;
-    //                         continue;
-    //                     }
-    //                     else if (line.Trim().StartsWith("/*"))
-    //                     {
-    //                         inCommentBlock = true;
-    //                         continue;
-    //                     }
-    //                     else if (line.Trim().StartsWith("TODO:")) continue;
-    //                     else if (line.Trim().StartsWith("INCLUDE ")) continue;
-    //                     else if (line.Trim().StartsWith("VAR ")) continue;
-    //                     else if (line.Trim().StartsWith("~")) continue;
-    //                     else if (line.Contains("#audio = ")) continue;
-    //                     else if (line.Contains("#lineID =")) continue;
+                        string path = "Speech/" + components[3].Trim();
+                        AudioClip currentSpeechClip = Resources.Load(path) as AudioClip;
+                        Debug.Log(path + " " + currentSpeechClip);
+                        SpeechLine newLine = new SpeechLine(id, "", owner, text, 0, AC_TextType.Speech, isPlayer);
+                        newLine.customAudioClip = currentSpeechClip;
+                        speechManager.lines.Add(newLine);
                         
+                        
+        
+                    }
+                }
+                while (line != null);
+                r.Close();
+            }
 
-    //                     int id = 0;
-
-    //                     while (true)
-    //                     {
-    //                         id++;
-    //                         if (speechManager.GetLine(id) == null)
-    //                         {
-    //                             break;
-    //                         }
-    //                     }
-
-    //                     SpeechLine newLine = new SpeechLine(id, "", "", line, 0, AC_TextType.Speech, false);
-    //                     speechManager.lines.Add(newLine);
-    //                     finalFile = finalFile.Insert(finalFile.LastIndexOf("\n"), string.Format(" #lineID = {0}", id));
-    //                 }
-    //             }
-    //             while (line != null);
-    //             r.Close();
-    //         }
-
-    //         StreamWriter w = new StreamWriter(file);
-    //         w.Write(finalFile);
-    //         w.Close();
-    //         Debug.Log(finalFile);
-    //     }
-    // }
+        }
+    }*/
 
     
 }
