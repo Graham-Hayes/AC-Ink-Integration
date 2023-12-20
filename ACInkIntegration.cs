@@ -49,7 +49,7 @@ public class ACInkIntegration : MonoBehaviour
         GlobalVariables.SetStringValue(varID, inkStory.state.ToJson());
     }
 
-    private void AfterLoad()
+    private void AfterLoad(int saveID)
     {
         inkStory.state.LoadJson(GlobalVariables.GetStringValue(varID));
     }
